@@ -1,6 +1,16 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pathlib import Path
+
+from app.routes import health, analyze, classify, copilot
+from app.models.database import engine, Base
+from app.models.submission import Submission
+from app.models.analysis import Analysis
+from app.models.classification import Classification
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Cognitive Logic API",
@@ -8,24 +18,27 @@ app = FastAPI(
     version="1.0.0",
 )
 
-@app.get("/health")
-async def health():
-    return {
-        "status": "ok",
-        "service": "Cognitive Logic API v1.0",
-        "version": "1.0.0"
-    }
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://cognitivelogic.it", "https://api.cognitivelogic.it", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/status")
-async def status():
-    return {
-        "status": "operational",
-        "brains": {"brain_a": "Claude", "brain_b": "Gemini"}
-    }
+app.include_router(health.router, tags=["Health"])
+app.include_router(analyze.router, prefix="/api", tags=["Analysis"])
+app.include_router(classify.router, prefix="/api", tags=["Classification"])
+app.include_router(copilot.router, prefix="/api", tags=["Copilot"])
+
+frontend_path = Path(__file__).parent.parent / "frontend"
 
 @app.get("/")
 async def root():
-    return {"message": "Cognitive Logic API - Visit /docs for API documentation"}
+    landing_page = frontend_path / "index.html"
+    if landing_page.exists():
+        return FileResponse(landing_page, media_type="text/html")
+    return {"message": "Cognitive Logic API"}
 
 if __name__ == "__main__":
     import uvicorn
